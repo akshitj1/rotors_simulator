@@ -1,0 +1,80 @@
+<?xml version="1.0" ?>
+<!--
+  Copyright 2016 Pavel Vechersky, ASL, ETH Zurich, Switzerland
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <!-- propeller and control surface macros -->
+    <xacro:include filename="$(find rotors_description)/urdf/fixed_wing_base.xacro" />
+
+    <!-- Fixed-wing with slipstream aerodynamics main body link -->
+    <xacro:macro name="fixed_wing_slipstream_body" params="robot_namespace mass length width height color
+        mesh_file mesh_scale 
+        *origin *inertia">
+        <link name="${robot_namespace}/base_link"></link>
+
+        <joint name="${robot_namespace}/base_joint" type="fixed">
+            <xacro:insert_block name="origin" />
+            <parent link="${robot_namespace}/base_link" />
+            <child link="${robot_namespace}/base_link_inertia" />
+        </joint>
+
+        <link name="${robot_namespace}/base_link_inertia">
+            <inertial>
+                <mass value="${mass}" />
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <xacro:insert_block name="inertia" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 ${height/2}" rpy="0 ${-PI/2} ${PI/2}" />
+                <geometry>
+                    <mesh filename="${mesh_file}" scale="${mesh_scale}" />
+                </geometry>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <box size="${length} ${width} ${height}" />
+                </geometry>
+                <surface>
+                    <contact>
+                        <ode>
+                            <max_vel>10</max_vel>
+                            <min_depth>0.01</min_depth>
+                        </ode>
+                    </contact>
+                    <friction>
+                        <ode />
+                    </friction>
+                </surface>
+            </collision>
+        </link>
+
+        <gazebo reference="${robot_namespace}/base_link">
+            <material>Gazebo/${color}</material>
+            <velocity_decay />
+            <self_collide>0</self_collide>
+        </gazebo>
+
+        <!-- Attach slipstream dynamics to the base_link -->
+        <gazebo>
+            <plugin filename="librotors_gazebo_fw_slipstream_dynamics_plugin.so" name="fw_slipstream_dynamics_plugin">
+                <robotNamespace>${robot_namespace}</robotNamespace>
+                <linkName>${robot_namespace}/base_link</linkName>
+            </plugin>
+        </gazebo>
+    </xacro:macro>
+</robot>

@@ -1,0 +1,51 @@
+<launch>
+    <arg name="uav_name" default="tailsitter" />
+    <arg name="world_name" default="basic" />
+    <arg name="enable_logging" default="true" />
+    <arg name="enable_ground_truth" default="true" />
+    <arg name="log_file" default="$(arg uav_name)" />
+    <arg name="debug" default="true" />
+    <arg name="gui" default="true" />
+    <arg name="paused" default="true" />
+    <!-- The following line causes gzmsg and gzerr messages to be printed to the console
+        (even when Gazebo is started through roslaunch) -->
+    <arg name="verbose" default="true" />
+
+    <env name="GAZEBO_MODEL_PATH" value="${GAZEBO_MODEL_PATH}:$(find rotors_gazebo)/models" />
+    <env name="GAZEBO_RESOURCE_PATH" value="${GAZEBO_RESOURCE_PATH}:$(find rotors_gazebo)/models" />
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find rotors_gazebo)/worlds/$(arg world_name).world" />
+        <arg name="debug" value="$(arg debug)" />
+        <arg name="paused" value="$(arg paused)" />
+        <arg name="gui" value="$(arg gui)" />
+        <arg name="verbose" value="$(arg verbose)" />
+    </include>
+
+    <!-- spawn ts -->
+    <arg name="namespace" default="$(arg uav_name)" />
+    <arg name="model" default="$(find rotors_description)/urdf/$(arg uav_name).xacro" />
+
+    <!-- send the robot XML to param server -->
+    <!-- about param tag: http://wiki.ros.org/roslaunch/XML/param -->
+    <param name="robot_description" command="
+    xacro '$(arg model)' enable_logging:=$(arg enable_logging) uav_name:=$(arg uav_name) namespace:=$(arg namespace)" />
+
+
+    <arg name="x" default="0.0" />
+    <arg name="y" default="0.0" />
+    <arg name="z" default="0.1" />
+    <arg name="R" default="0.0" />
+    <arg name="P" default="0.0" />
+    <arg name="Y" default="0.0" />
+
+    <!-- push robot_description to factory and spawn robot in gazebo -->
+    <node name="spawn_$(arg namespace)" pkg="gazebo_ros" type="spawn_model" args="-param robot_description
+        -urdf
+        -x $(arg x)
+        -y $(arg y)
+        -z $(arg z)
+        -R $(arg R)
+        -P $(arg P)
+        -Y $(arg Y)
+        -model $(arg namespace)" respawn="false" output="screen"></node>
+</launch>

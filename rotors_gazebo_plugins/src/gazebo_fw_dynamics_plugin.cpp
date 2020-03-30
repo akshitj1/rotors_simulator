@@ -373,6 +373,7 @@ void GazeboFwDynamicsPlugin::ActuatorsCallback(
       actuators_msg->normalized(vehicle_params_.rudder.channel));
 
   throttle_ = actuators_msg->normalized(vehicle_params_.throttle_channel);
+  gzdbg << "throttle set to: " << throttle_<<std::endl;
 }
 
 void GazeboFwDynamicsPlugin::RollPitchYawrateThrustCallback(
