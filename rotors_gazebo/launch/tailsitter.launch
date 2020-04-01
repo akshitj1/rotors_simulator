@@ -48,4 +48,7 @@
         -P $(arg P)
         -Y $(arg Y)
         -model $(arg namespace)" respawn="false" output="screen"></node>
+
+    <!-- controller node -->
+    <node name="tailsitter_controller_node" pkg="rotors_control" type="tailsitter_node" output="screen" />
 </launch>

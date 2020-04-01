@@ -52,11 +52,23 @@ add_dependencies(roll_pitch_yawrate_thrust_controller_node ${catkin_EXPORTED_TAR
 target_link_libraries(roll_pitch_yawrate_thrust_controller_node
   roll_pitch_yawrate_thrust_controller ${catkin_LIBRARIES})
 
-install(TARGETS lee_position_controller roll_pitch_yawrate_thrust_controller
+# add_executable(tailsitter_controller_node src/nodes/tailsitter_controller_node.cpp)
+# add_dependencies(tailsitter_controller_node ${catkin_EXPORTED_TARGETS})
+# target_link_libraries(tailsitter_controller_node ${catkin_LIBRARIES})
+
+
+install(
+  TARGETS 
+    lee_position_controller 
+    roll_pitch_yawrate_thrust_controller
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
 
-install(TARGETS lee_position_controller_node roll_pitch_yawrate_thrust_controller_node
+install(
+  TARGETS 
+    lee_position_controller_node 
+    roll_pitch_yawrate_thrust_controller_node
+    # tailsitter_controller_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
