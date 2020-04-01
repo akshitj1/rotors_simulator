@@ -116,6 +116,7 @@ if (NOT NO_ROS)
     rotors_control
     std_srvs
     tf
+    optim
   )
 endif()
 
@@ -229,7 +230,7 @@ if (NOT NO_ROS)
     catkin_package(
       INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS}
       LIBRARIES rotors_gazebo_motor_model rotors_gazebo_controller_interface
-      CATKIN_DEPENDS cv_bridge geometry_msgs mav_msgs octomap_msgs octomap_ros rosbag roscpp gazebo_plugins rotors_comm rotors_control std_srvs tf
+      CATKIN_DEPENDS cv_bridge geometry_msgs mav_msgs octomap_msgs octomap_ros rosbag roscpp gazebo_plugins rotors_comm rotors_control std_srvs tf optim
       DEPENDS Eigen octomap OpenCV
       #CFG_EXTRAS rotors_gazebo_plugins.cmake
     )
@@ -238,7 +239,7 @@ if (NOT NO_ROS)
     catkin_package(
       INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS}
       LIBRARIES rotors_gazebo_motor_model rotors_gazebo_controller_interface
-      CATKIN_DEPENDS cv_bridge geometry_msgs mav_msgs octomap_msgs octomap_ros rosbag roscpp gazebo_plugins rotors_comm rotors_control std_srvs tf
+      CATKIN_DEPENDS cv_bridge geometry_msgs mav_msgs octomap_msgs octomap_ros rosbag roscpp gazebo_plugins rotors_comm rotors_control std_srvs tf optim
       DEPENDS Eigen octomap OpenCV
       #CFG_EXTRAS rotors_gazebo_plugins.cmake
     )
