@@ -30,6 +30,8 @@
 
 namespace gazebo
 {
+using namespace ignition::math;
+typedef Vector3d Vector3;
 
 typedef const boost::shared_ptr<const gz_sensor_msgs::Actuators>
     GzActuatorsMsgPtr;
@@ -93,6 +95,10 @@ private:
   /// \brief    Pointer to the update event connection.
   event::ConnectionPtr updateConnection_;
 
+  common::Time prev_time = 0;
+
+  const bool kPrintOnControlUpdates = false;
+
   /// \brief    Left elevon deflection [rad].
   double delta_elevon_left_;
   /// \brief    Right elevon deflection [rad].
@@ -122,15 +128,17 @@ private:
   const double kP1 = -0.3;
   const double kb_x = 7.46e-6, kc_x = 2.18e-4, kb_y = 4.12e-6, kb_z = 3.19e-6, kc_z = 3.18e-4;
 
-  const double kWingSpan = 0.6, kWingChord = 0.2, kWingArea = 0.12;
+public:
+  static constexpr double kWingSpan = 0.6, kWingChord = 0.2, kWingArea = 0.12;
 
+private:
   /// \brief    Processes the actuator commands.
   /// \details  Converts control surface actuator inputs into physical angles
   ///           before storing them and throttle values for later use in
   ///           calculation of forces and moments.
   void ActuatorsCallback(GzActuatorsMsgPtr &actuators_msg);
 
-  void calcActuatorsControl();
+  void calcActuatorsControl(const double &sim_sampling_time);
 
   double toRads(const double degrees);
 
@@ -141,10 +149,19 @@ private:
   double getPropThrust(const double &throttle);
   double getDownwashAirSpeed(const double &f_prop, const Vector3 &vel);
   double getAirspeedOverElevon(const double &f_prop, const Vector3 &vel);
-  double getPitchingMoment(const double &surface_speed, const double &attack_angle){
+  double getPitchingMoment(const double &surface_speed, const double &attack_angle);
+  double getDynamicPressure(const double surface_speed);
+};
 
-  };
+struct PitchOptimizationData
+{
+  Vector3 f_des_ab;
+  double f_lift, f_drag;
+};
 
+double coordinated_pitch_residual(const arma::vec &vals_inp, arma::vec *grad_out, void *opt_data);
+const double cap(const double &inp_val, const double &valL, const double &valU);
+void getTrajPoint(const double &sim_time, Vector3 &pos_des, Vector3 &vel_des);
 } // namespace gazebo
 
 #endif // ROTORS_GAZEBO_FW_SLIPSTREAM_DYNAMICS_PLUGIN_H

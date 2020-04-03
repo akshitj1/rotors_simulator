@@ -26,7 +26,8 @@
 #include <gazebo/gazebo.hh>
 #include <tinyxml.h>
 
-namespace gazebo {
+namespace gazebo
+{
 
 //===============================================================================================//
 //========================================= DEBUGGING ===========================================//
@@ -38,9 +39,9 @@ namespace gazebo {
 // The following boolean constants enable/disable debug printing when certain plugin methods are called.
 // Suitable for debugging purposes. Left on permanently can swamp std::out and can crash Gazebo.
 
-static const bool kPrintOnPluginLoad    = true;
-static const bool kPrintOnUpdates       = false;
-static const bool kPrintOnMsgCallback   = true;
+static const bool kPrintOnPluginLoad = true;
+static const bool kPrintOnUpdates = true;
+static const bool kPrintOnMsgCallback = true;
 
 /// @}
 
@@ -60,21 +61,22 @@ static const std::string kConnectRosToGazeboSubtopic = "connect_ros_to_gazebo_su
 ///           and broadcast transforms to the ROS system.
 static const std::string kBroadcastTransformSubtopic = "broadcast_transform";
 
-
 /// \brief      Obtains a parameter from sdf.
 /// \param[in]  sdf           Pointer to the sdf object.
 /// \param[in]  name          Name of the parameter.
 /// \param[out] param         Param Variable to write the parameter to.
 /// \param[in]  default_value Default value, if the parameter not available.
 /// \param[in]  verbose       If true, gzerror if the parameter is not available.
-template<class T>
-bool getSdfParam(sdf::ElementPtr sdf, const std::string& name, T& param, const T& default_value, const bool& verbose =
-                     false) {
-  if (sdf->HasElement(name)) {
+template <class T>
+bool getSdfParam(sdf::ElementPtr sdf, const std::string &name, T &param, const T &default_value, const bool &verbose = false)
+{
+  if (sdf->HasElement(name))
+  {
     param = sdf->GetElement(name)->Get<T>();
     return true;
   }
-  else {
+  else
+  {
     param = default_value;
     if (verbose)
       gzerr << "[rotors_gazebo_plugins] Please specify a value for parameter \"" << name << "\".\n";
@@ -83,10 +85,10 @@ bool getSdfParam(sdf::ElementPtr sdf, const std::string& name, T& param, const T
 }
 
 template <typename T>
-void model_param(const std::string& world_name, const std::string& model_name, const std::string& param, T& param_value)
+void model_param(const std::string &world_name, const std::string &model_name, const std::string &param, T &param_value)
 {
-  TiXmlElement* e_param = nullptr;
-  TiXmlElement* e_param_tmp = nullptr;
+  TiXmlElement *e_param = nullptr;
+  TiXmlElement *e_param_tmp = nullptr;
   std::string dbg_param;
 
   TiXmlDocument doc(world_name + ".xml");
@@ -94,11 +96,11 @@ void model_param(const std::string& world_name, const std::string& model_name, c
   {
     TiXmlHandle h_root(doc.RootElement());
 
-    TiXmlElement* e_model = h_root.FirstChild("model").Element();
+    TiXmlElement *e_model = h_root.FirstChild("model").Element();
 
-    for( e_model; e_model; e_model=e_model->NextSiblingElement("model") )
+    for (e_model; e_model; e_model = e_model->NextSiblingElement("model"))
     {
-      const char* attr_name = e_model->Attribute("name");
+      const char *attr_name = e_model->Attribute("name");
       if (attr_name)
       {
         //specific
@@ -129,10 +131,9 @@ void model_param(const std::string& world_name, const std::string& model_name, c
       gzdbg << model_name << " model: " << dbg_param << "parameter " << param << " = " << param_value << " from " << doc.Value() << "\n";
     }
   }
-
 }
 
-}
+} // namespace gazebo
 
 /// \brief    This class can be used to apply a first order filter on a signal.
 ///           It allows different acceleration and deceleration time constants.
@@ -145,63 +146,68 @@ void model_param(const std::string& world_name, const std::string& model_name, c
 ///           discretized system (ZoH):
 ///             x(k+1) = exp(samplingTime*(-1/tau))*x(k) + (1 - exp(samplingTime*(-1/tau))) * u(k)
 template <typename T>
-class FirstOrderFilter {
+class FirstOrderFilter
+{
 
- public:
-  FirstOrderFilter(double timeConstantUp, double timeConstantDown, T initialState):
-      timeConstantUp_(timeConstantUp),
-      timeConstantDown_(timeConstantDown),
-      previousState_(initialState) {}
+public:
+  FirstOrderFilter(double timeConstantUp, double timeConstantDown, T initialState) : timeConstantUp_(timeConstantUp),
+                                                                                     timeConstantDown_(timeConstantDown),
+                                                                                     previousState_(initialState) {}
 
   /// \brief    This method will apply a first order filter on the inputState.
-  T updateFilter(T inputState, double samplingTime) {
+  T updateFilter(T inputState, double samplingTime)
+  {
 
     T outputState;
-    if (inputState > previousState_) {
+    if (inputState > previousState_)
+    {
       // Calcuate the outputState if accelerating.
       double alphaUp = exp(-samplingTime / timeConstantUp_);
       // x(k+1) = Ad*x(k) + Bd*u(k)
       outputState = alphaUp * previousState_ + (1 - alphaUp) * inputState;
-
     }
-    else {
+    else
+    {
       // Calculate the outputState if decelerating.
       double alphaDown = exp(-samplingTime / timeConstantDown_);
       outputState = alphaDown * previousState_ + (1 - alphaDown) * inputState;
     }
     previousState_ = outputState;
     return outputState;
-
   }
 
   ~FirstOrderFilter() {}
 
- protected:
+protected:
   double timeConstantUp_;
   double timeConstantDown_;
   T previousState_;
 };
 
 /// \brief    Computes a quaternion from the 3-element small angle approximation theta.
-template<class Derived>
-Eigen::Quaternion<typename Derived::Scalar> QuaternionFromSmallAngle(const Eigen::MatrixBase<Derived> & theta) {
+template <class Derived>
+Eigen::Quaternion<typename Derived::Scalar> QuaternionFromSmallAngle(const Eigen::MatrixBase<Derived> &theta)
+{
   typedef typename Derived::Scalar Scalar;
   EIGEN_STATIC_ASSERT_FIXED_SIZE(Derived);
   EIGEN_STATIC_ASSERT_VECTOR_SPECIFIC_SIZE(Derived, 3);
   const Scalar q_squared = theta.squaredNorm() / 4.0;
 
-  if (q_squared < 1) {
+  if (q_squared < 1)
+  {
     return Eigen::Quaternion<Scalar>(sqrt(1 - q_squared), theta[0] * 0.5, theta[1] * 0.5, theta[2] * 0.5);
   }
-  else {
+  else
+  {
     const Scalar w = 1.0 / sqrt(1 + q_squared);
     const Scalar f = w * 0.5;
     return Eigen::Quaternion<Scalar>(w, theta[0] * f, theta[1] * f, theta[2] * f);
   }
 }
 
-template<class In, class Out>
-void copyPosition(const In& in, Out* out) {
+template <class In, class Out>
+void copyPosition(const In &in, Out *out)
+{
   out->x = in.x;
   out->y = in.y;
   out->z = in.z;
