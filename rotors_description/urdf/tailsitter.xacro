@@ -34,17 +34,18 @@
     <xacro:property name="body_width" value="0.06" />
     <xacro:property name="body_height" value="0.2" />
     <xacro:property name="body_mesh_file" value="$(find rotors_gazebo)/models/ts_ethz/meshes/pacflyer_s100_mockup.dae" />
-    <xacro:property name="body_mesh_scale_factor" value="${45e-5}" />    
+    <xacro:property name="body_mesh_scale_factor" value="${45e-5}" />
     <xacro:property name="body_mesh_scale" value="${body_mesh_scale_factor} ${body_mesh_scale_factor} ${body_mesh_scale_factor}" />
     <xacro:property name="body_color" value="White" />
     <xacro:property name="body_inertia">
-        <inertia ixx="0.000462" ixy="0.0" ixz="0.0" iyy="0.00232" iyz="0.0" izz="0.00187" />
+        <inertia ixx="4.62e-4" ixy="0.0" ixz="0.0" iyy="2.32e-3" iyz="0.0" izz="1.87e-3" />
     </xacro:property>
+    <xacro:property name="control_params_yaml_file" value="$(find rotors_gazebo)/resource/tailsitter/control.yaml" />
 
 
     <!-- main body -->
-    <xacro:fixed_wing_slipstream_body robot_namespace="${namespace}" mass="${mass_body}" length="${body_length}" width="${body_width}" height="${body_height}" color="${body_color}" mesh_file="${body_mesh_file}" mesh_scale="${body_mesh_scale}">
-<!-- start COM above ground level -->
+    <xacro:fixed_wing_slipstream_body robot_namespace="${namespace}" mass="${mass_body}" length="${body_length}" width="${body_width}" height="${body_height}" color="${body_color}" mesh_file="${body_mesh_file}" mesh_scale="${body_mesh_scale}" control_params_yaml_file="${control_params_yaml_file}">
+        <!-- start COM above ground level -->
         <origin xyz="0 0 ${body_length}" rpy="0 0 0" />
         <xacro:insert_block name="body_inertia" />
     </xacro:fixed_wing_slipstream_body>

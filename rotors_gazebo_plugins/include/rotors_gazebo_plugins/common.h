@@ -40,7 +40,7 @@ namespace gazebo
 // Suitable for debugging purposes. Left on permanently can swamp std::out and can crash Gazebo.
 
 static const bool kPrintOnPluginLoad = true;
-static const bool kPrintOnUpdates = true;
+static const bool kPrintOnUpdates = false;
 static const bool kPrintOnMsgCallback = true;
 
 /// @}

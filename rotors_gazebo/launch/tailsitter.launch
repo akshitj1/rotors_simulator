@@ -4,9 +4,17 @@
     <arg name="enable_logging" default="true" />
     <arg name="enable_ground_truth" default="true" />
     <arg name="log_file" default="$(arg uav_name)" />
-    <arg name="debug" default="true" />
+    <arg name="record_path" default="/home/akshit/ext/workspace/catkin_ws/logs/$(arg uav_name)" />
+
+
+    <arg name="debug" default="false" />
     <arg name="gui" default="true" />
     <arg name="paused" default="true" />
+
+    <!-- <arg name="debug" default="true" /> -->
+    <!-- <arg name="gui" default="false" /> -->
+    <!-- <arg name="paused" default="false" /> -->
+
     <!-- The following line causes gzmsg and gzerr messages to be printed to the console
         (even when Gazebo is started through roslaunch) -->
     <arg name="verbose" default="true" />
@@ -19,6 +27,7 @@
         <arg name="paused" value="$(arg paused)" />
         <arg name="gui" value="$(arg gui)" />
         <arg name="verbose" value="$(arg verbose)" />
+        <arg name="extra_gazebo_args" value="-r --record_path $(arg record_path)" />
     </include>
 
     <!-- spawn ts -->
@@ -33,7 +42,7 @@
 
     <arg name="x" default="0.0" />
     <arg name="y" default="0.0" />
-    <arg name="z" default="0.1" />
+    <arg name="z" default="0.4" />
     <arg name="R" default="0.0" />
     <arg name="P" default="0.0" />
     <arg name="Y" default="0.0" />

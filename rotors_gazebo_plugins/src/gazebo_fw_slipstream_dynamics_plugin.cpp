@@ -41,6 +41,23 @@ void GazeboFwSlipstreamDynamicsPlugin::Load(gazebo::physics::ModelPtr _model, sd
   if (link_ == NULL)
     gzthrow("couldn't find specified link \"" << link_name << ".");
 
+  if (_sdf->HasElement("controlParamsYAML"))
+  {
+    std::string control_params_yaml =
+        _sdf->GetElement("controlParamsYAML")->Get<std::string>();
+    ts_control_params.LoadVehicleParamsYAML(control_params_yaml);
+  }
+  else
+    gzwarn << "no Vehicle params config found. Using default values." << std::endl;
+
+  Vector3 pos_init;
+  Vector3 vel_init;
+  getTrajPoint(0, pos_init, vel_init);
+  Quaterniond rot_init = Quaterniond::EulerToQuaternion(kHover ? 0 : -M_PI / 2, 0.0, 0.0);
+  Pose3d pose_init = Pose3d(pos_init, rot_init);
+  link_->SetWorldPose(pose_init);
+  link_->SetLinearVel(vel_init);
+
   getSdfParam<std::string>(_sdf, "actuatorsSubTopic",
                            actuators_sub_topic_,
                            mav_msgs::default_topics::COMMAND_ACTUATORS);
@@ -61,10 +78,18 @@ void GazeboFwSlipstreamDynamicsPlugin::OnUpdate(const common::UpdateInfo &_info)
 
   UpdateForcesAndMoments();
 
-  double sampling_time = (_info.simTime - prev_time).Double();
-  prev_time = _info.simTime;
+  updateSimFreq(_info.simTime);
 
   calcActuatorsControl(sampling_time);
+}
+
+void GazeboFwSlipstreamDynamicsPlugin::updateSimFreq(const common::Time &cur_time)
+{
+  assert(cur_time > prev_time);
+  sampling_time = (cur_time - prev_time).Double();
+  if (sampling_time > 1)
+    gzwarn << "large sampling time: " << sampling_time << std::endl;
+  this->prev_time = cur_time;
 }
 
 void GazeboFwSlipstreamDynamicsPlugin::UpdateForcesAndMoments()
@@ -79,38 +104,39 @@ void GazeboFwSlipstreamDynamicsPlugin::UpdateForcesAndMoments()
   // B denotes body frame and W world frame ... e.g., W_rot_W_B denotes
   // rotation of B wrt. W expressed in W.
   ignition::math::Quaterniond W_rot_W_B = link_->WorldPose().Rot();
-  // vel of B w.r.t W
-  Vector3 vel_B_W = link_->WorldLinearVel();
-  Vector3 angular_vel_B_W = link_->RelativeAngularVel();
+  // vel of B in world frame
+  Vector3 vel_W = link_->WorldLinearVel();
+  Vector3 vel_B = link_->RelativeLinearVel();
+  Vector3 angular_vel_B = link_->RelativeAngularVel();
 
   // eqn. 5
-  double surface_speed = getSurfaceSpeed(vel_B_W);
-  double attack_angle = getAttackAngle(vel_B_W);
+  double surface_speed = getSurfaceSpeed(vel_B);
+  double attack_angle = getAttackAngle(vel_B);
 
   double f_prop_l = getPropThrust(throttle_left);
   double f_prop_r = getPropThrust(throttle_right);
   double f_prop_avg = (f_prop_l + f_prop_r) / 2;
-  Vector3 f_prop = Vector3(0, 0, f_prop_l + f_prop_r);
+  Vector3 f_prop_B = Vector3(0, 0, f_prop_l + f_prop_r);
 
   const double dynamic_pressure = getDynamicPressure(surface_speed);
-  double f_lift = getLiftForce(surface_speed, attack_angle, f_prop_avg);
-  double f_drag = getDragForce(surface_speed, attack_angle, f_prop_avg);
-  Vector3 f_aero = Vector3(0, f_lift, -f_drag);
+  double f_lift_B = getLiftForce(surface_speed, attack_angle, f_prop_avg);
+  double f_drag_B = getDragForce(surface_speed, attack_angle, f_prop_avg);
+  Vector3 f_aero_B = Vector3(0, f_lift_B, -f_drag_B);
 
-  Vector3 f_B = f_prop + f_aero;
+  Vector3 f_B = f_prop_B + f_aero_B;
 
   // moments
   double m_pitch = getPitchingMoment(surface_speed, attack_angle);
 
   Vector3 m_prop = Vector3(0, kPropSeperation * (f_prop_r - f_prop_l), kMotorTorqueConstant * (f_prop_r - f_prop_l));
 
-  double elevon_air_speed_l = getAirspeedOverElevon(f_prop_l, vel_B_W);
-  double elevon_air_speed_r = getAirspeedOverElevon(f_prop_r, vel_B_W);
+  double elevon_air_speed_l = getAirspeedOverElevon(f_prop_l, vel_B);
+  double elevon_air_speed_r = getAirspeedOverElevon(f_prop_r, vel_B);
 
-  double m_aero_x = (kb_x + kc_x * delta_elevon_left_) * pow(elevon_air_speed_l, 2) + (kb_x + kc_x * delta_elevon_right_) * pow(elevon_air_speed_r, 2) + m_pitch;
-  double m_aero_y = kb_y * (elevon_air_speed_l - elevon_air_speed_r);
-  double m_aero_z = (kb_z + kc_z * delta_elevon_left_) * pow(elevon_air_speed_l, 2) - (kb_z + kc_z * delta_elevon_right_) * pow(elevon_air_speed_r, 2);
-  Vector3 m_aero = Vector3(m_aero_x, m_aero_y, m_aero_z);
+  Vector3 m_aero;
+  m_aero.X((kb_x + kc_x * delta_elevon_left_) * pow(elevon_air_speed_l, 2) + (kb_x + kc_x * delta_elevon_right_) * pow(elevon_air_speed_r, 2) + m_pitch);
+  m_aero.Y(kb_y * (elevon_air_speed_l - elevon_air_speed_r));
+  m_aero.Z((kb_z + kc_z * delta_elevon_left_) * pow(elevon_air_speed_l, 2) - (kb_z + kc_z * delta_elevon_right_) * pow(elevon_air_speed_r, 2));
 
   Vector3 m_B = m_prop + m_aero;
 
@@ -182,7 +208,7 @@ double DeNormalize(
     return (valNormalized + 1) * (flatValMax - flatValMin) / 2 + flatValMin;
 }
 
-double toRads(const double degrees)
+double GazeboFwSlipstreamDynamicsPlugin::toRads(const double degrees)
 {
   return degrees / 180 * M_PI;
 }
@@ -231,6 +257,8 @@ double GazeboFwSlipstreamDynamicsPlugin::getDynamicPressure(const double surface
 
 double GazeboFwSlipstreamDynamicsPlugin::getLiftForce(const double &surface_speed, const double &attack_angle, const double &f_prop_avg)
 {
+  // todo: assert that angle is b/w -20 to 20 deg as not true after that
+  // OR replace with flat plate dynamics
   return getDynamicPressure(surface_speed) * (kL1 * sin(attack_angle) * pow(cos(attack_angle), 2) + kL2 * pow(sin(attack_angle), 3)) + kL3 * f_prop_avg;
 }
 
@@ -241,14 +269,23 @@ double GazeboFwSlipstreamDynamicsPlugin::getDragForce(const double &surface_spee
 
 void getTrajPoint(const double &sim_time, Vector3 &pos_des, Vector3 &vel_des)
 {
+  if (GazeboFwSlipstreamDynamicsPlugin::kHover)
+  {
+    pos_des = Vector3(0, 0, 5 * GazeboFwSlipstreamDynamicsPlugin::kWingChord);
+    vel_des = Vector3(0, 0, 0);
+    return;
+  }
   // track circular trajectory
   const double kTrajRadius = 5 * GazeboFwSlipstreamDynamicsPlugin::kWingSpan;
   const double kTrajHeigth = 5 * GazeboFwSlipstreamDynamicsPlugin::kWingChord;
+
   const double kTimePeriod = 3;
   const double kAngularVel = 2 * M_PI / kTimePeriod;
 
+  // theta from x axis
   double theta = (sim_time / kTimePeriod - int(sim_time / kTimePeriod)) * 2 * M_PI;
   pos_des = Vector3(kTrajRadius * cos(theta), kTrajRadius * sin(theta), kTrajHeigth);
+  // rotate in CCW direction
   vel_des = kTrajRadius * kAngularVel * Vector3(-sin(theta), cos(theta), 0.0);
 }
 
@@ -259,10 +296,12 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
 
   Pose3d pose_W_B = link_->WorldPose();
 
+  // newton kinematics in world frame
   Vector3d pos_est = pose_W_B.Pos();
   Vector3 vel_est = link_->WorldLinearVel();
-  Vector3 acc_est = link_->WorldAngularAccel();
+  Vector3 acc_est = link_->WorldLinearAccel();
 
+  // euler kinematics in body frame
   Quaterniond rot_est = pose_W_B.Rot();
   Vector3 angular_vel_est = link_->RelativeAngularVel();
   Vector3 angular_acc_est = link_->RelativeAngularAccel();
@@ -272,24 +311,27 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
   getTrajPoint(this->prev_time.Double(), pos_des, vel_des);
 
   // A. position control
-  const double kPosControlTimePeriod = sim_sampling_time; // 0.6;
+  const double kPosControlTimePeriod = ts_control_params.pos_time_const;
   const double kPosDampingFactor = 1.0;
 
   Vector3 acc_des = acc_est + 1 / pow(kPosControlTimePeriod, 2) * (pos_des - pos_est) + 2 * kPosDampingFactor / kPosControlTimePeriod * (vel_des - vel_est);
-  Vector3 f_des = kMassBody * (acc_des - Vector3(0, 0, kGravity));
+  Vector3 f_des = kMassBody * (acc_des - Vector3(0, 0, -kGravity));
 
   // B. coordinated flight
   // rotations are defined as composition of angle axis rotations  R_c*R_b*R_a
   // a-> sync heading direction as we have most thrust authority in this direction
   // b-> roll to have coordinated flight (no x component) as we donot have any control authority in this dir.
   // c-> find pitch so that combination of thrust and aero forces can achive these within limits
-  double rot_angle_a = acos(vel_est.Z() / vel_est.Length());
-  Vector3 rot_axis_a = Vector3(-vel_est.Y(), vel_est.X(), 0.0).Normalize();
+  Vector3 vel_ref = vel_des;
+  bool singularity = pow(vel_ref.X(), 2) + pow(vel_ref.Y(), 2) < 0.1;
+  double rot_angle_a = singularity ? 0.0 : acos(vel_ref.Z() / vel_ref.Length());
+  Vector3 rot_axis_a = singularity ? Vector3(1, 0, 0) : Vector3(-vel_ref.Y(), vel_ref.X(), 0.0).Normalize();
   Quaterniond rot_a = Quaterniond(rot_axis_a, rot_angle_a);
 
   Vector3 f_des_a = rot_a * f_des;
-  double rot_angle_b = acos(f_des_a.Y() / sqrt(pow(f_des_a.X(), 2) + pow(f_des_a.Y(), 2)));
-  Vector3 rot_axis_b = Vector3(0, 0, -sgn(f_des_a.X()));
+  singularity = pow(f_des_a.X(), 2) + pow(f_des_a.Y(), 2) < 0.1;
+  double rot_angle_b = singularity ? 0 : acos(f_des_a.Y() / sqrt(pow(f_des_a.X(), 2) + pow(f_des_a.Y(), 2)));
+  Vector3 rot_axis_b = singularity ? Vector3(0, 0, 1) : Vector3(0, 0, -sgn(f_des_a.X()));
   Quaterniond rot_b = Quaterniond(rot_axis_b, rot_angle_b);
 
   Vector3 f_des_ab = rot_b * f_des_a;
@@ -297,62 +339,72 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
 
   PitchOptimizationData opt_data;
   opt_data.f_des_ab = f_des_ab;
-  double f_prop_avg = (getPropThrust(throttle_right) + getPropThrust(throttle_left)) / 2;
-  opt_data.f_lift = getLiftForce(getSurfaceSpeed(vel_est), getAttackAngle(vel_est), f_prop_avg);
-  opt_data.f_drag = getDragForce(getSurfaceSpeed(vel_est), getAttackAngle(vel_est), f_prop_avg);
+  opt_data.v_ref = getSurfaceSpeed(rot_b * rot_a * vel_des);
   // pitch angle, avg_thrust
-  arma::vec2 optimum_vals = arma::zeros<arma::vec>(2);
+  arma::vec2 optimum_vals = arma::ones<arma::vec>(2) * 0.1;
   optim::algo_settings_t options;
+  options.verbose_print_level = 0;
+
+  options.vals_bound = true;
+
+  options.lower_bounds = arma::zeros<arma::vec>(2);
   options.lower_bounds(0) = -M_PI;
   options.lower_bounds(1) = kThrottleL;
 
+  options.upper_bounds = arma::zeros<arma::vec>(2);
   options.upper_bounds(0) = M_PI;
   options.upper_bounds(1) = kThrottleU;
+
   options.opt_iter = 50;
 
   bool success = optim::nm(optimum_vals, coordinated_pitch_residual, &opt_data, options);
   assert(success);
   double rot_angle_c = optimum_vals(0);
-  double f_prop_avg_des = optimum_vals(0);
+  double f_prop_avg_des = optimum_vals(1);
 
   Vector3 rot_axis_c = Vector3(-1, 0, 0);
   Quaterniond rot_c = Quaterniond(rot_axis_c, rot_angle_c);
 
-  Quaterniond rot_des = (rot_a * rot_b) * rot_c;
+  // multiply op. precedence is left to right
+  Quaterniond rot_des = rot_c * rot_b * rot_a;
 
   // C. attitude control
   // valid for small errors only. todo: replace with globally valid optimum
-  const double kAttControlTimePeriod = sim_sampling_time; // 0.25;
+  const double kAttControlTimePeriod = ts_control_params.att_time_const;
   Quaterniond rot_err = rot_est * rot_des.Inverse();
   Vector3 rot_err_axis;
   double rot_err_angle;
+  // angle in range [0, 2*pi]
   rot_err.ToAxis(rot_err_axis, rot_err_angle);
+  rot_err_angle = rot_err_angle > M_PI ? rot_err_angle - 2 * M_PI : rot_err_angle;
   Vector3 angular_vel_des = -1 / kAttControlTimePeriod * rot_err_axis * rot_err_angle;
 
   // D. body rate control
-  const double kAngularVelTimePeriod = sim_sampling_time; // 0.05;
+  const double kAngularVelTimePeriod = ts_control_params.angular_vel_time_const;
   Vector3 body_inertia_diag = Vector3(0.462, 2.32, 1.87) * 1e-3;
   Matrix3d body_intertia = Matrix3d(
       body_inertia_diag.X(), 0.0, 0.0,
       0.0, body_inertia_diag.Y(), 0.0,
       0.0, 0.0, body_inertia_diag.Z());
   Vector3 torque_des = 1 / kAngularVelTimePeriod * body_intertia * (angular_vel_des - angular_vel_est) +
-                       angular_vel_est.Cross(body_intertia * angular_vel_des);
+                       angular_vel_est.Cross(body_intertia * angular_vel_est);
 
   double f_prop_del = (torque_des.Y() * kAirDensity * kPropDiameter) / (2 * kAirDensity * kPropDiameter * kPropSeperation - 4 * kb_y);
-  double f_prop_l_des = f_prop_avg - f_prop_del;
-  double f_prop_r_des = f_prop_avg + f_prop_del;
+  double f_prop_l_des = cap(f_prop_avg_des - f_prop_del, kThrottleL, kThrottleU);
+  double f_prop_r_des = cap(f_prop_avg_des + f_prop_del, kThrottleL, kThrottleU);
+
+  Vector3 vel_des_B = rot_des * vel_des;
 
   // todo: can we use symbolic library for programmatic inversion
-  double elevon_air_speed_l = getAirspeedOverElevon(f_prop_l_des, vel_des);
-  double elevon_air_speed_r = getAirspeedOverElevon(f_prop_r_des, vel_des);
+  double elevon_air_speed_l = getAirspeedOverElevon(f_prop_l_des, vel_des_B);
+  double elevon_air_speed_r = getAirspeedOverElevon(f_prop_r_des, vel_des_B);
 
   double defl_term_f = (kb_z * (pow(elevon_air_speed_r, 2) - pow(elevon_air_speed_l, 2)) +
                         kMotorTorqueConstant * (f_prop_l_des - f_prop_r_des) +
                         torque_des.Z()) /
                        (2 * kc_z);
   double defl_term_l = (kb_x * (pow(elevon_air_speed_r, 2) + pow(elevon_air_speed_l, 2)) +
-                        getPitchingMoment(getSurfaceSpeed(vel_des), getAttackAngle(vel_des)) -
+                        getPitchingMoment(getSurfaceSpeed(vel_des_B), getAttackAngle(vel_des_B)) -
                         torque_des.X()) /
                        (2 * kc_x);
 
@@ -360,10 +412,17 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
   double elevon_defl_l_des = 1 / pow(elevon_air_speed_l, 2) * (defl_term_f - defl_term_l);
   double elevon_defl_r_des = 1 / pow(elevon_air_speed_r, 2) * (-defl_term_f - defl_term_l);
 
-  this->throttle_left = cap(f_prop_l_des, kThrottleL, kThrottleU);
-  this->throttle_right = cap(f_prop_r_des, kThrottleL, kThrottleU);
+  this->throttle_left = f_prop_l_des;
+  this->throttle_right = f_prop_r_des;
   this->delta_elevon_left_ = cap(elevon_defl_l_des, kElevonAlphaL, kElevonAlphaU);
   this->delta_elevon_right_ = cap(elevon_defl_r_des, kElevonAlphaL, kElevonAlphaU);
+
+  if (prev_time - latest_debug_time > kDebugInterval)
+  {
+    latest_debug_time = prev_time;
+    gzdbg << std::fixed << std::setprecision(2);
+    gzdbg << rot_est.X() << "\t" << delta_elevon_left_ << "\t" << delta_elevon_right_ << std::endl;
+  }
 }
 
 // todo: replace with filter utility
@@ -378,8 +437,17 @@ coordinated_pitch_residual(const arma::vec &vals_inp, arma::vec *grad_out, void 
   double pitch_angle = vals_inp(0);
   double thrust_props_avg = vals_inp(1);
   PitchOptimizationData *data = reinterpret_cast<PitchOptimizationData *>(opt_data);
-  double del_fy = data->f_lift - cos(pitch_angle) * data->f_des_ab.Y() - sin(pitch_angle) * data->f_des_ab.Z();
-  double del_fz = 2 * thrust_props_avg - data->f_drag - cos(pitch_angle) * data->f_des_ab.Z() - sin(pitch_angle) * data->f_des_ab.Y();
+  double f_lift = GazeboFwSlipstreamDynamicsPlugin::getLiftForce(
+      data->v_ref,
+      pitch_angle,
+      thrust_props_avg);
+  double f_drag = GazeboFwSlipstreamDynamicsPlugin::getDragForce(
+      data->v_ref,
+      pitch_angle,
+      thrust_props_avg);
+
+  double del_fy = f_lift - cos(pitch_angle) * data->f_des_ab.Y() - sin(pitch_angle) * data->f_des_ab.Z();
+  double del_fz = 2 * thrust_props_avg - f_drag - cos(pitch_angle) * data->f_des_ab.Z() - sin(pitch_angle) * data->f_des_ab.Y();
 
   double residual = pow(del_fy, 2) + pow(del_fz, 2);
   return residual;
