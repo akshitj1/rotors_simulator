@@ -127,7 +127,7 @@ private:
   TsControlParams ts_control_params;
   common::Time prev_time = 0;
   common::Time latest_debug_time = 0;
-  const common::Time kDebugInterval = 0.1;
+  const common::Time kDebugInterval = 0.05;
   double sampling_time = 0;
 
   const bool kPrintOnControlUpdates = false;
@@ -158,12 +158,12 @@ private:
   // pw75 airfoil
   // https://colab.research.google.com/drive/1sOBJVBV01y0fO1oZhXUMovB-0IZWwE8v
   static constexpr double kL1 = 3.5, kL2 = 0, kL3 = 0, kD1 = 3.0, kD2 = 0, kD3 = 0;
-  static constexpr double kP1 = -0.3;
-  static constexpr double kb_x = 7.46e-6, kc_x = 2.18e-4, kb_y = 4.12e-6, kb_z = 3.19e-6, kc_z = 3.18e-4;
+  static constexpr double kP1 = 0.3;
+  static constexpr double kb_x = -7.46e-6, kc_x = -2.18e-4, kb_y = 4.12e-6, kb_z = 3.19e-6, kc_z = 3.18e-4;
 
 public:
   static constexpr double kWingSpan = 0.6, kWingChord = 0.2, kWingArea = 0.12;
-  static constexpr bool kHover = true;
+  static constexpr bool kHover = false;
 
 private:
   /// \brief    Processes the actuator commands.

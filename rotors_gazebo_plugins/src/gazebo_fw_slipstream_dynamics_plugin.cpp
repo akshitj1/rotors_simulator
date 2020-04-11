@@ -370,6 +370,7 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
 
   // C. attitude control
   // valid for small errors only. todo: replace with globally valid optimum
+  // global att. control ref. https://colab.research.google.com/drive/1LJPXMggrqhzTic0CUFloLizo2HTj_Guk
   const double kAttControlTimePeriod = ts_control_params.att_time_const;
   Quaterniond rot_err = rot_est * rot_des.Inverse();
   Vector3 rot_err_axis;
@@ -421,7 +422,7 @@ void GazeboFwSlipstreamDynamicsPlugin::calcActuatorsControl(const double &sim_sa
   {
     latest_debug_time = prev_time;
     gzdbg << std::fixed << std::setprecision(2);
-    gzdbg << rot_est.X() << "\t" << delta_elevon_left_ << "\t" << delta_elevon_right_ << std::endl;
+    gzdbg << "pitch_des: " << rot_des.Euler().X() << "\tpitch_est: " << rot_est.Euler().X() << "\televon_l: " << delta_elevon_left_ << "\televon_r: " << delta_elevon_right_ << std::endl;
   }
 }
 
@@ -447,7 +448,7 @@ coordinated_pitch_residual(const arma::vec &vals_inp, arma::vec *grad_out, void 
       thrust_props_avg);
 
   double del_fy = f_lift - cos(pitch_angle) * data->f_des_ab.Y() - sin(pitch_angle) * data->f_des_ab.Z();
-  double del_fz = 2 * thrust_props_avg - f_drag - cos(pitch_angle) * data->f_des_ab.Z() - sin(pitch_angle) * data->f_des_ab.Y();
+  double del_fz = 2 * thrust_props_avg - f_drag - cos(pitch_angle) * data->f_des_ab.Z() + sin(pitch_angle) * data->f_des_ab.Y();
 
   double residual = pow(del_fy, 2) + pow(del_fz, 2);
   return residual;
